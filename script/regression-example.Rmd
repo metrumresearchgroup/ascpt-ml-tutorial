@@ -1,0 +1,152 @@
+---
+title: "Modeling with xgboost: Regression"
+subtitle: "ASCPT Tutorial"
+author: "Matthew Wiens, Metrum Research Group"
+output: pdf_document
+date: '2024-06-19'
+editor_options: 
+  chunk_output_type: console
+---
+
+Data source: 
+
+Liver Disorders
+https://archive.ics.uci.edu/dataset/60/liver+disorders
+https://doi.org/10.24432/C54G67
+
+1. mcv: mean corpuscular volume
+2. alkphos: alkaline phosphotase
+3. sgpt: alanine aminotransferase
+4. sgot: aspartate aminotransferase
+5. gammagt: gamma-glutamyl transpeptidase
+6. drinks: number of half-pint equivalents of alcoholic beverages drunk per day
+
+
+# Setup
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#load libraries 
+library(tidyverse)
+library(tidymodels)
+library(xgboost)
+
+data_dir <- here::here("data", "source")
+
+ggplot2::theme_set(ggplot2::theme_bw())
+```
+
+Read in the data, with appropriate column names
+
+Note the selector column was used in the original analysis to denote the train/test split. It is not used here, and the data splitting is within this script.
+
+```{R}
+
+input_column_names <- c(
+  "mcv",
+  "alkphos",
+  "sgpt",
+  "sgot",
+  "gammagt",
+  "drinks",
+  "selector"
+) 
+  
+dat <- read_csv(
+  file = file.path(data_dir, "bupa.data"),
+    col_names = input_column_names,
+  na = c("", "NA", "?")
+)  %>% 
+  select(-selector)
+
+
+
+```
+
+
+```{R}
+
+init_split <- initial_split(dat, prop = 3/4)
+
+# No further pre-processing is necessary
+
+```
+
+In this example, we'll just go straight into the cross-validation. If you were to call xgboost directly, you would need to change the objective in the param list. The regression loss functions all start with "reg", and the typical choice is "reg:squarederror", for the mean squared error, comparable to fitting least-squares or a linear regression with a Gaussian distribution. 
+
+```{R}
+xgb_spec <- boost_tree(
+  trees = 15,
+  tree_depth = tune(),
+  min_n = tune(),
+  loss_reduction = 0,        
+  sample_size = 1.0, 
+  learn_rate = 0.3      
+) %>%
+  set_engine("xgboost") %>%
+  set_mode("regression") # Changed from classification example
+
+xgb_grid <- grid_latin_hypercube(
+  tree_depth(range = c(2, 6)),
+  min_n(range = c(1, 15)),
+  size = 25
+)
+
+# Model specification for this dataset
+recipe_xgboost_tidymodels <- recipes::recipe(
+  drinks ~ mcv + alkphos + sgpt + sgot + gammagt,
+                data = training(init_split)) 
+
+xgb_wf <- workflow() %>%
+  add_recipe(recipe_xgboost_tidymodels) %>%
+  add_model(xgb_spec)
+
+cv_folds <- vfold_cv(training(init_split), v = 5)
+
+set.seed(1234)
+
+
+# Run the cross-validation
+tuning_results <- tune_grid(
+  xgb_wf,
+  resamples = cv_folds,
+  grid = xgb_grid,
+  metrics = metric_set(rmse, rsq_trad, rsq), # Updated metrics for regression
+  control = control_grid(save_pred = TRUE, verbose = TRUE,  event_level = "first")
+)
+
+# Summary of the results
+collect_metrics(tuning_results)
+
+# Using rmse to select best model in the regression example
+best_rmse <- select_best(tuning_results, metric = "rmse")
+
+# Create the final model, with actual values for the hyperparameters 
+final_wf <- finalize_workflow(
+  xgb_wf,
+  best_rmse
+)
+
+# Re-fit the model using the best set of hyper-parameters found by the cross-validation
+final_fit <- final_wf %>%
+  last_fit(init_split) 
+```
+
+The rmse is 3.16 for this model (in the metrics column).
+
+Make predicted vs observed plot for quick model eval.
+
+```{R}
+
+dat %>%
+  bind_cols(
+    predict(extract_workflow(final_fit),
+            new_data = dat)) %>%
+  ggplot(aes(x = drinks, y = .pred)) +
+  geom_point() +
+  geom_smooth(se = F) +
+  geom_abline(slope = 1, linetype = 2) +
+  labs(x = "Observed", y = "Predicted")
+```

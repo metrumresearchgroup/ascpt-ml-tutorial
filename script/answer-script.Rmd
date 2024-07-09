@@ -1,9 +1,9 @@
 ---
-title: "Modeling with xgboost"
-subtitle: "ASCPT Webinar"
+title: "Modeling with xgboost: Classification"
+subtitle: "ASCPT Tutorial"
 author: "Matthew Wiens, Metrum Research Group"
 output: pdf_document
-date: '2023-11-02'
+date: '2024-06-19'
 editor_options: 
   chunk_output_type: console
 ---
@@ -340,7 +340,7 @@ collect_metrics(tuning_results)
 
 # Analysis of the results
 # ROC AUC
-best_auc <- select_best(tuning_results, "roc_auc")
+best_auc <- select_best(tuning_results, metric = "roc_auc")
 
 # Create the final model, with actual values for the hyperparameters 
 final_wf <- finalize_workflow(
@@ -460,7 +460,8 @@ xgb_wf_weights <- xgb_wf %>%
   add_case_weights(case_weight)
 
 # TODO: As before, use cross validation to tune the model hyperparameters
-# Use precision-recall tuning_results_weights <- tune_grid(
+# Use precision-recall
+tuning_results_weights <- tune_grid(
   xgb_wf_weights,
   resamples = cv_folds,
   grid = xgb_grid,
@@ -561,7 +562,7 @@ We also sanity check the shapley predictions by making predictions for two diffe
 # Create a dataset of covariates to make predictions
 x_predict <- testing(init_split)[1,] %>%
   select(-tumor_size_f) %>%
-  dplyr::inner_join(tibble(tumor_size_f = c("0-4", "50-54")), by = character())
+  dplyr::cross_join(tibble(tumor_size_f = c("0-4", "50-54")))
 
 
 # Make the predictions

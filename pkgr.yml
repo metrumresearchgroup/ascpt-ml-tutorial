@@ -5,6 +5,7 @@ Packages:
   - caTools
   - data.table
   - here
+  - jsonlite
   - markdown
   - tidyverse
   - tidymodels
@@ -12,9 +13,9 @@ Packages:
   - DiagrammeR
 
 Repos:
-  - MPN: https://mpn.metworx.com/snapshots/stable/2023-03-13
+  - MPN: https://mpn.metworx.com/snapshots/stable/2024-06-12
 
 Lockfile:
     Type: renv
 
-Rpath: ${R_EXE_4_1}
+Rpath: ${R_EXE_4_3}

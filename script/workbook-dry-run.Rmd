@@ -1,5 +1,5 @@
 ---
-title: "Modeling with xgboost"
+title: "Modeling with xgboost: Classification"
 subtitle: "ASCPT Webinar"
 author: "Matthew Wiens, Metrum Research Group"
 output: pdf_document

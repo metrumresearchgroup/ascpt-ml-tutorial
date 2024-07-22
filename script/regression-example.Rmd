@@ -137,14 +137,14 @@ final_fit <- final_wf %>%
 
 The rmse is 3.16 for this model (in the metrics column).
 
-Make predicted vs observed plot for quick model eval.
+Make predicted vs observed plot for quick model evaluation. The fit object can be extracted from the workflow for custom analysis.
 
 ```{R}
 
-dat %>%
+dat %>% # Observed
   bind_cols(
     predict(extract_workflow(final_fit),
-            new_data = dat)) %>%
+            new_data = dat)) %>% # Predicted
   ggplot(aes(x = drinks, y = .pred)) +
   geom_point() +
   geom_smooth(se = F) +

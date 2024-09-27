@@ -340,12 +340,12 @@ collect_metrics(tuning_results)
 
 # Analysis of the results
 # ROC AUC
-best_auc <- select_best(tuning_results, metric = "roc_auc")
+best_auc_params <- select_best(tuning_results, metric = "roc_auc")
 
 # Create the final model, with actual values for the hyperparameters 
 final_wf <- finalize_workflow(
   xgb_wf,
-  best_auc
+  best_auc_params
 )
 
 # Re-fit the model using the best set of hyper-parameters found by the cross-validation

@@ -115,7 +115,7 @@ tuning_results <- tune_grid(
   resamples = cv_folds,
   grid = xgb_grid,
   metrics = metric_set(rmse, rsq_trad, rsq), # Updated metrics for regression
-  control = control_grid(save_pred = TRUE, verbose = TRUE,  event_level = "first")
+  control = control_grid(save_pred = TRUE, verbose = TRUE)
 )
 
 # Summary of the results
@@ -136,6 +136,28 @@ final_fit <- final_wf %>%
 ```
 
 The rmse is 3.16 for this model (in the metrics column).
+
+Plot the predictions over the range of a single covariate
+
+```{R}
+
+tibble(
+  mcv = median(dat$mcv),
+  alkphos = median(dat$alkphos),
+  sgpt = median(dat$sgpt),
+  sgot = median(dat$sgot),
+  gammagt = seq(min(dat$gammagt), max(dat$gammagt), length.out = 100)
+) %>%
+  mutate(predicted_drinks = 
+           predict(extract_workflow(final_fit),
+                   new_data = .)$.pred) %>%
+  ggplot(aes(x = gammagt, y = predicted_drinks, color = "Predicted")) +
+  geom_line() +
+  geom_point(mapping = aes(y = drinks, color = "Observed"), data = dat) +
+  labs(x = "gamma-glutamyl transpeptidase", y = "Predicted Drinks", color = "Data")
+
+```
+
 
 Make predicted vs observed plot for quick model evaluation. The fit object can be extracted from the workflow for custom analysis.
 

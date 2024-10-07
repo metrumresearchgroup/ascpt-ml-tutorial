@@ -131,8 +131,8 @@ dat <- dat_raw %>%
 # will use default proportion for 75% (3/4) training, 25% testing
 init_split <- initial_split(dat, prop = 3/4)
 
-# Come back here and try 80/20, or 66/33 splits
-# after fitting the model
+# You can come back here and try 80/20, or 66/33 splits
+# after fitting the model.
 # How do the fits and evaluation change?
 ```
 
@@ -293,10 +293,10 @@ xgb_spec_all <- boost_tree(
 # What values seem to work well?
 # Alternatively, what values lead to bad results?
 xgb_spec <- boost_tree(
-  trees = 15,
+  trees = 30,
   tree_depth = tune(),
   min_n = tune(),
-  loss_reduction = 0,        
+  loss_reduction = 0.00,        
   sample_size = 1.0, 
   learn_rate = 0.3      
 ) %>%
@@ -324,8 +324,6 @@ xgb_wf <- workflow() %>%
 cv_folds <- vfold_cv(training(init_split), v = 5,  strata = Class)
 
 set.seed(1234)
-
-# Question: How many models do we have to fit?
 
 # Run the cross-validation
 tuning_results <- tune_grid(
@@ -358,8 +356,8 @@ final_fit %>%
   roc_curve(Class, `.pred_recurrence-events`, event_level = "first") %>% 
   autoplot()
 
-# The ROC (receiver operating characteristic) assess the performance across the range of classification thresholds 
-# Question: what are reasons to not use 50% as the cutoff?
+# The ROC (receiver operating characteristic) assess
+# the performance across the range of classification thresholds 
 final_fit %>%
     collect_predictions() %>% 
     roc_auc(Class, `.pred_recurrence-events`, event_level = "first")
@@ -368,31 +366,19 @@ final_fit %>%
     collect_predictions() %>% 
     accuracy(Class, .pred_class)
 
-# Question: Is this accuracy good for this dataset? What accuracy would a very naive algorithm have? 
+# Note: a model predicting no recurrence would 
+# have an accuracy of 70%
 
-# Answer: Well a model always predicting no events would have approx 70% accuracy
-# naive model of no events. Not modeling per se, but I think is important
-# for building intuition around the topic.
-
-# To help answer this, build a confusion matrix for this model and the naive model (i.e. always predict no recurrence).
-
-# Remove This
 # Confusion matrix for the model
 final_fit %>%
     collect_predictions() %>% 
     conf_mat(Class, .pred_class)
 
-# Null model confusion matrix
+# For reference,
+# null model confusion matrix
 testing(init_split) %>%
   mutate(null_model_prediction = first(Class[Class == "no-recurrence-events"])) %>%
   conf_mat(truth = "Class", estimate = null_model_prediction)
-
-
-# Question: What about focusing on the patients with recurrence-events?
-# What are alternatives to ROC in the yardstick package for calculating an AUC?
-
-# Question: Why are the performance metrics worse in the final fit than in the 
-# cross-validation
 
 # The precision-recall curve focuses on the prediction of one event type of interest. 
 # It is related to the ROC curve
@@ -418,7 +404,6 @@ final_fit %>%
 # This is output in the Rstudio viewer
 xgboost::xgb.plot.tree(model = extract_fit_parsnip(final_fit)$fit, trees = 0)
 
-# EXERCISE: Output the first 3 trees. How do you interpret this sequence of trees
 ```
 
 Model evaluation for binary endpoints is often challenging regardless of the modeling strategy. Here, we'll use a calibration table to assess the predicted probabilities versus observed probabilities across the range of the data. Think of this like a predicted vs. observed plot for continuous data. Calibration is the idea that if we predict a 70% probability for something, the event should in fact happen 70% of the time. In fact, tree-based models often have difficulty predicting on the extreme ranges of the data (why?),  but we don't really have enough data here to see that very well. Ideally, we'd create a lot of different buckets to assess calibration probability in, but there's only a moderate amount of data in the test set, so 4 are used here to illustrate the concept. 
@@ -434,87 +419,8 @@ final_fit %>%
             predicted = mean(`.pred_recurrence-events`))
 ```
 
-# Bonus Section: Imbalanced Classes
 
-Modeling situations where one class of data we're trying to make predictions for is happens rarely in the dataset. By default, every instance of the data is weighted the same, which means the algorithm will put more weight on correctly predicting the common class, and predictions of the rare class can be poor. One approach is to reweight the training data such that each class is equally weighted. 
-
-```{R}
-
-set.seed(1234)
-
-# This recipe includes the pre-computed weights (case_weight) in the formula 
-recipe_xgboost_tidymodels_weights <- recipes::recipe(
-  Class ~ age_f + menopause + tumor_size_f + inv_nodes_f + node_caps + 
-    deg_malig + breast + breast_quad + irradiat +
-    case_weight, 
-                data = training(init_split)) %>%
-  step_impute_mode(all_nominal_predictors()) %>%
-  step_impute_mean(all_numeric_predictors()) %>%
-  step_ordinalscore(age_f, tumor_size_f, inv_nodes_f) %>%
-  step_dummy(breast, breast_quad, irradiat, menopause, node_caps, one_hot = T) 
-
-# Using the update function for slightly different models
-# reduces the copy-pasting of code
-xgb_wf_weights <- xgb_wf %>%
-  update_recipe(recipe_xgboost_tidymodels_weights) %>%
-  add_case_weights(case_weight)
-
-# TODO: As before, use cross validation to tune the model hyperparameters
-# Use precision-recall
-tuning_results_weights <- tune_grid(
-  xgb_wf_weights,
-  resamples = cv_folds,
-  grid = xgb_grid,
-  metrics = metric_set(pr_auc), # Use precision-recall 
-  control = control_grid(save_pred = TRUE, verbose = TRUE,  event_level = "first")
-)
-
-# We're using the precision-recall AUC
-# because we care more about identifying the 
-# patients with recurrence events
-collect_metrics(tuning_results_weights)
-
-# Use the precision-recall AUC to pick the best model
-best_auc_weighted <- select_best(tuning_results_weights, metric = "pr_auc")
-
-
-# Create the final model, with actual values for the hyperparameters 
-final_wf_weighted <- finalize_workflow(
-  xgb_wf_weights,
-  best_auc_weighted
-)
-
-# As before, refit using the best hyperparameters
-final_fit_weighted <- final_wf_weighted %>%
-  last_fit(init_split) 
-
-# TODO: Make a precision-recall curve
-# Remove this for exercise
-final_fit_weighted %>%
-  collect_predictions() %>% 
-  pr_curve(Class, `.pred_recurrence-events`, event_level = "first") %>% 
-  autoplot()
-
-# TODO: Calculate the precision-recall AUC
-# Remove this for exercise
-final_fit_weighted %>%
-    collect_predictions() %>% 
-    pr_auc(Class, `.pred_recurrence-events`, event_level = "first")
-
-# Calculate the ROC AUC.
-# Remove this for exercise
-# How does this compare to the previous model
-final_fit_weighted %>%
-    collect_predictions() %>% 
-    roc_auc(Class, `.pred_recurrence-events`, event_level = "first")
-
-# Question: How has using the class weights changed each of the performance metrics
-# (ROC AUC, PR AUC, Accuracy)
-# Consider how the goals of the model inform these choices
-```
-
-
-# Bonus Section: Model interpretation with Shapley Values
+# Extra Section: Model interpretation with Shapley Values
 
 Shapley values are one strategy for interpreting ML models. For tree-based models (e.g., xgboost, random forests) they are especially computationally efficent. The intuition is to recover a set of additive "forces" that explain the difference between the prediction of a given data point and the mean prediction, by assigning an effect to each feature (covariate), which add up to that difference. 
 
@@ -547,12 +453,10 @@ shap_plot
 # N.B. many of the libraries were developed first for Python, and then ported to R
 # e.g. fastshap
 
-# Question: What does the shapley plot look like using overfit model on the training vs testing sets?
 
-# Excercise: Another common shapley plot has a covariate on the x-axis, 
+# Another common shapley plot has a covariate on the x-axis, 
 # the shapley value on the y axis, and a second covariate as the color
-# to explore interaction effects. Using this style of plot, 
-# what interactions are interesting? 
+
 ```
 
 We also sanity check the shapley predictions by making predictions for two different values of tumor sizes for one set of covariate values. This is analogous to plotting the predictions for a reference individual and permuting the one covariate.

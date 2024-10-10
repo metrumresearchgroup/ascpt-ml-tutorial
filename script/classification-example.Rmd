@@ -20,6 +20,7 @@ Load libraries and set up file paths.
 knitr::opts_chunk$set(echo = TRUE)
 
 #load libraries 
+library(magrittr)
 library(tidyverse)
 library(tidymodels)
 library(xgboost)
@@ -354,7 +355,12 @@ final_fit <- final_wf %>%
 final_fit %>%
   collect_predictions() %>% 
   roc_curve(Class, `.pred_recurrence-events`, event_level = "first") %>% 
-  autoplot()
+  autoplot() %T>%
+  ggsave(filename = "figure/roc-curve.pdf",
+         plot = .,
+         width = 4,
+         height = 4,
+         dpi = 500)
 
 # The ROC (receiver operating characteristic) assess
 # the performance across the range of classification thresholds 
@@ -390,7 +396,12 @@ final_fit %>%
   # `no-recurrence-event` factor level of Class, which is the first
   # level in Class.
   pr_curve(Class, `.pred_recurrence-events`, event_level = "first") %>% 
-  autoplot()
+  autoplot() %T>%
+  ggsave(filename = "figure/pr-curve.pdf",
+         plot = .,
+         width = 4,
+         height = 4,
+         dpi = 500)
 
 final_fit %>%
   collect_predictions() %>% 

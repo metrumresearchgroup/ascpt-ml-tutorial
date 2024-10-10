@@ -29,6 +29,7 @@ https://doi.org/10.24432/C54G67
 knitr::opts_chunk$set(echo = TRUE)
 
 #load libraries 
+library(magrittr)
 library(tidyverse)
 library(tidymodels)
 library(xgboost)
@@ -141,7 +142,7 @@ Plot the predictions over the range of a single covariate
 
 ```{R}
 
-tibble(
+(tibble(
   mcv = median(dat$mcv),
   alkphos = median(dat$alkphos),
   sgpt = median(dat$sgpt),
@@ -154,7 +155,12 @@ tibble(
   ggplot(aes(x = gammagt, y = predicted_drinks, color = "Predicted")) +
   geom_line() +
   geom_point(mapping = aes(y = drinks, color = "Observed"), data = dat) +
-  labs(x = "gamma-glutamyl transpeptidase", y = "Predicted Drinks", color = "Data")
+  labs(x = "gamma-glutamyl transpeptidase", y = "Predicted Drinks", color = "Data")) %T>%
+  ggsave(filename = "figure/ggt-predictions.pdf",
+         plot = .,
+         width = 4,
+         height = 4,
+         dpi = 500)
 
 ```
 
@@ -163,13 +169,18 @@ Make predicted vs observed plot for quick model evaluation. The fit object can b
 
 ```{R}
 
-dat %>% # Observed
+(dat %>% # Observed
   bind_cols(
     predict(extract_workflow(final_fit),
             new_data = dat)) %>% # Predicted
-  ggplot(aes(x = drinks, y = .pred)) +
+  ggplot(aes(x = .pred, y = drinks)) +
   geom_point() +
   geom_smooth(se = F) +
   geom_abline(slope = 1, linetype = 2) +
-  labs(x = "Observed", y = "Predicted")
+  labs(x = "Predicted Drinks", y = "Observed Drinks")) %T>%
+  ggsave(filename = "figure/observed-vs-predicted.pdf",
+         plot = .,
+         width = 4,
+         height = 4,
+         dpi = 500)
 ```
